@@ -1,0 +1,194 @@
+documentacion de la app realizada en dash
+
+generar un entorno de desarrollo con python
+
+python -m venv venv
+
+librerias a instalar
+--pip install numpy
+--pip install dash
+--pip install pandas
+--pip install plotly
+
+importa librerias
+import dash
+from dash import Dash, html, dcc
+import pandas as pd
+import plotly.express as px
+import plotly.graph_objects as go
+from dash.dependencies import Input, Output
+import numpy as np
+
+dash y dash.dependencies para crear la aplicación web interactiva.
+pandas para manejar el dataset en formato DataFrame.
+plotly.express y plotly.graph_objects para generar gráficos interactivos.
+numpy para realizar cálculos numéricos.
+
+importacion de los datos
+carga el archivo CSV con datos de reciclaje.
+Se convierte la columna "Fecha" en un tipo de dato de fecha.
+Se establece "Fecha" como el índice del DataFrame para facilitar el análisis temporal.
+
+df = pd.read_csv("/home/muresaki/Documents/proyecto_final/datos/dataset.csv")
+df["Fecha"] = pd.to_datetime(df["Fecha"])
+df.set_index("Fecha", inplace=True)
+
+nota: genrar un archivo  que se llame datos para importa la data
+
+Renombrar las columnas
+
+rename = {
+    df.columns[0]: "Plástico",
+    df.columns[1]: "Madera",
+    df.columns[2]: "Vidrio",
+    df.columns[3]: "Sargazo"
+}
+df.rename(columns=rename, inplace=True)
+
+Se renombran las columnas del dataset para que sean más comprensibles.
+
+Creación de la aplicación Dash
+
+app = Dash(__name__)
+
+Se inicializa la aplicación Dash.
+
+Diseño del layout
+
+app.layout = html.Div([
+    html.H1("Sistema Predictivo para la Estimación en la Demanda de Materiales Reciclados", style={"text-align": "center"}),
+
+Se define el diseño de la aplicación con un html.Div() principal.
+
+Se agrega un título centrado.
+
+Dropdown para seleccionar el material
+    html.Div([
+        dcc.Dropdown(
+            id="material-selector",
+            options=[{"label": mat, "value": mat} for mat in materiales],
+            value="Plástico",
+            clearable=False,
+            style={"width": "200px"}
+        )
+    ], style={"text-align": "center", "margin-bottom": "20px"}),
+
+Se crea un dropdown (dcc.Dropdown) para elegir entre los materiales reciclados.
+
+value="Plástico" establece Plástico como la opción predeterminada.
+
+Gráficos
+
+    html.Div([
+        dcc.Graph(id="grafica-total", style={"flex": "1", "height": "400px"}),
+        dcc.Graph(id="grafica-tendencia", style={"flex": "1", "height": "400px"})
+    ], style={"display": "flex", "gap": "20px", "justify-content": "center"}),
+
+Se crean dos gráficos:
+"grafica-total": muestra el total recolectado por año.
+"grafica-tendencia": muestra la tendencia de reciclaje mensual.
+
+    html.Div([
+        html.Div([
+            dcc.Graph(id="grafica-residuos", style={"height": "400px"})
+        ], style={"flex": "1", "margin-right": "10px"}),
+
+        html.Div([
+            dcc.Graph(id="acf-pacf", style={"height": "400px"})
+        ], style={"flex": "1", "margin-left": "10px"})
+
+    ], style={"display": "flex", "gap": "20px", "justify-content": "center", "margin-top": "30px"})
+
+], style={"background-color": "#f5f5f5", "padding": "20px"})
+Se añaden dos gráficos más:
+"grafica-residuos": distribuye los residuos (errores de predicción).
+"acf-pacf": muestra la autocorrelación de los datos.
+
+    Callback para actualizar los gráficos dinámicamente
+
+@app.callback(
+    [Output("grafica-total", "figure"),
+     Output("grafica-tendencia", "figure"),
+     Output("grafica-residuos", "figure"),
+     Output("acf-pacf", "figure")],
+    [Input("material-selector", "value")]
+)
+Se define una función que actualiza los gráficos cada vez que se selecciona un material en el Dropdown.
+ Total reciclado por año
+
+df_agg = df.resample("Y").sum()
+df_agg.index = df_agg.index.year
+
+fig_barras = px.bar(
+    df_agg, x=df_agg.index, y=material,
+    title=f"Total de {material} recolectado por año",
+    labels={"index": "Año", material: "Cantidad (kg)"},
+    color_discrete_sequence=["#002D62"]
+)
+Se agrupan los datos por año (resample("Y").sum()).
+Se genera un gráfico de barras para mostrar el total recolectado anualmente.
+Tendencia mensual
+
+df_trend = df.resample("M").sum()
+fig_tendencia = px.line(
+    df_trend, x=df_trend.index, y=material,
+    title=f"Tendencia de {material} recolectado (mensual)",
+    labels={"Fecha": "Fecha", material: "Cantidad (kg)"},
+    line_shape="spline",
+    markers=True,
+    color_discrete_sequence=["#D50032"]
+)
+Se agrupan los datos por mes (resample("M").sum()).
+Se genera un gráfico de líneas para visualizar la tendencia mensual.
+Distribución de residuos
+
+residuos = df[material] - df[material].rolling(window=10).mean()
+fig_residuos = px.histogram(
+    residuos,
+    title=f"Distribución de los residuos de {material} (en kg)",
+    labels={"value": "Residuos (kg)"},
+    nbins=20,
+    color_discrete_sequence=["#D50032"]
+)
+Se calculan los residuos como la diferencia entre los valores reales y su media móvil.
+Se crea un histograma de los residuos.
+
+Autocorrelación y PACF
+
+lags = np.arange(1, 13)
+acf_values = [df[material].autocorr(lag) for lag in lags]
+
+fig_acf = go.Figure()
+fig_acf.add_trace(go.Scatter(
+    x=lags, y=acf_values,
+    mode="markers+lines",
+    name="ACF",
+    line=dict(color="#002D62")
+))
+Se calcula la autocorrelación (acf_values).
+Se crea un gráfico para mostrar la autocorrelación a diferentes retrasos (lags).
+
+from statsmodels.tsa.stattools import pacf
+pacf_values = pacf(df[material], nlags=12)
+
+fig_pacf = go.Figure()
+fig_pacf.add_trace(go.Scatter(
+    x=lags, y=pacf_values[1:],
+    mode="markers+lines",
+    name="PACF",
+    line=dict(color="#D50032")
+))
+Se usa statsmodels.tsa.stattools.pacf para calcular la autocorrelación parcial.
+Se grafica la PACF.
+
+Ejecutar la aplicación
+
+if __name__ == "__main__":
+    app.run(debug=True)
+Se ejecuta la aplicación con debug=True para ver mensajes de error en tiempo real.
+
+
+para ejerctar la app utilize el sigente comando python app.py
+
+
+

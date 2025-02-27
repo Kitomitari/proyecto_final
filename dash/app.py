@@ -1,5 +1,3 @@
-# Importar librerías
-#nota tener instaladas esta librerias
 import dash
 from dash import Dash, html, dcc
 import pandas as pd
@@ -8,14 +6,11 @@ import plotly.graph_objects as go
 from dash.dependencies import Input, Output
 import numpy as np
 
-# Importación de la data
 df = pd.read_csv("/home/muresaki/Documents/proyecto_final/datos/dataset.csv")
 
-# Convertir "Fecha" a tipo datetime
 df["Fecha"] = pd.to_datetime(df["Fecha"])
-df.set_index("Fecha", inplace=True)  # Convertir "Fecha" en índice
+df.set_index("Fecha", inplace=True)  
 
-# Renombrar columnas
 rename = {
     df.columns[0]: "Plástico",
     df.columns[1]: "Madera",
@@ -24,51 +19,41 @@ rename = {
 }
 df.rename(columns=rename, inplace=True)
 
-# Lista de materiales para que funcione el selector
 materiales = list(df.columns)
 
-# Iniciar la app
 app = Dash(__name__)
 
-# Layout con el dropdown para seleccionar material y las gráficas
 app.layout = html.Div([
     html.H1("Sistema Predictivo para la Estimación en la Demanda de Materiales Reciclados", style={"text-align": "center"}),
 
-    # Contenedor con el dropdown para seleccionar el material
     html.Div([
-        # Dropdown o boton para seleccionar material 
         dcc.Dropdown(
             id="material-selector",
             options=[{"label": mat, "value": mat} for mat in materiales],
-            value="Plástico",  # Valor inicial
+            value="Plástico",  
             clearable=False,
             style={"width": "200px"}
         )
     ], style={"text-align": "center", "margin-bottom": "20px"}),
 
-    # Contenedor con las dos primeras gráficas (barras y tendencia) en formato horizontal
     html.Div([
-        dcc.Graph(id="grafica-total", style={"flex": "1", "height": "400px"}),  # Barras
-        dcc.Graph(id="grafica-tendencia", style={"flex": "1", "height": "400px"})  # Tendencia mensual
-    ], style={"display": "flex", "gap": "20px", "justify-content": "center"}),  # Primer contenedor de gráficas
+        dcc.Graph(id="grafica-total", style={"flex": "1", "height": "400px"}),  
+        dcc.Graph(id="grafica-tendencia", style={"flex": "1", "height": "400px"})  
+    ], style={"display": "flex", "gap": "20px", "justify-content": "center"}), 
 
-    # Contenedor para la distribución de residuos y autocorrelación, en formato horizontal
     html.Div([
-        # Gráfica de residuos
         html.Div([
-            dcc.Graph(id="grafica-residuos", style={"height": "400px"})  # Distribución de residuos
-        ], style={"flex": "1", "margin-right": "10px"}),  # Residuos a la izquierda
+            dcc.Graph(id="grafica-residuos", style={"height": "400px"})  
+        ], style={"flex": "1", "margin-right": "10px"}),  
 
-        # Gráfica de autocorrelación y autocorrelación parcial
         html.Div([
-            dcc.Graph(id="acf-pacf", style={"height": "400px"})  # Autocorrelación y autocorrelación parcial
-        ], style={"flex": "1", "margin-left": "10px"})  # Autocorrelación a la derecha
+            dcc.Graph(id="acf-pacf", style={"height": "400px"})  
+        ], style={"flex": "1", "margin-left": "10px"})  
 
-    ], style={"display": "flex", "gap": "20px", "justify-content": "center", "margin-top": "30px"})  # Segundo contenedor de gráficas
+    ], style={"display": "flex", "gap": "20px", "justify-content": "center", "margin-top": "30px"})  
 
-], style={"background-color": "#f5f5f5", "padding": "20px"})  # Fondo gris claro para el layout
+], style={"background-color": "#f5f5f5", "padding": "20px"})  
 
-# Callback para actualizar las gráficas de total, tendencia mensual, distribución de residuos y autocorrelación
 @app.callback(
     [Output("grafica-total", "figure"), 
      Output("grafica-tendencia", "figure"), 
@@ -79,14 +64,12 @@ app.layout = html.Div([
 def actualizar_graficas(material):
     print(f"Actualizando gráfico para el material: {material}")
     
-    # Validar si los datos existen
     df_agg = df.resample("Y").sum()
     if material not in df_agg.columns:
         print(f"Error: El material '{material}' no se encuentra en los datos.")
     
     df_agg.index = df_agg.index.year
 
-    #  Gráfico de Barras (Total por Año) 
     fig_barras = px.bar(
         df_agg, x=df_agg.index, y=material,
         title=f"Total de {material} recolectado por año",
@@ -96,11 +79,10 @@ def actualizar_graficas(material):
     fig_barras.update_layout(
         xaxis_title="Año", 
         yaxis_title="Cantidad (kg)", 
-        plot_bgcolor="#FFFFFF",  # Fondo 
+        plot_bgcolor="#FFFFFF", 
         paper_bgcolor="#FFFFFF"
     )
 
-    # Gráfico de Tendencia (Evolución Mensual) 
     df_trend = df.resample("M").sum()
     fig_tendencia = px.line(
         df_trend, x=df_trend.index, y=material,
@@ -121,7 +103,6 @@ def actualizar_graficas(material):
         paper_bgcolor="#FFFFFF"
     )
 
-    # Gráfico de distribución de residuos 
     residuos = df[material] - df[material].rolling(window=10).mean()
     fig_residuos = px.histogram(
         residuos, 
@@ -137,7 +118,6 @@ def actualizar_graficas(material):
         paper_bgcolor="#FFFFFF"
     )
 
-    # Gráfico de autocorrelación (ACF) 
     lags = np.arange(1, 13)
     acf_values = [df[material].autocorr(lag) for lag in lags]
     print(f"ACF values: {acf_values}")
@@ -158,7 +138,6 @@ def actualizar_graficas(material):
         paper_bgcolor="#FFFFFF"
     )
 
-    # Gráfico de autocorrelación parcial (PACF) - Rojo ITLA
     from statsmodels.tsa.stattools import pacf
     pacf_values = pacf(df[material], nlags=12)
 
@@ -178,10 +157,7 @@ def actualizar_graficas(material):
         paper_bgcolor="#FFFFFF"
     )
 
-    # Retornar las gráficas
     return fig_barras, fig_tendencia, fig_residuos, fig_acf
 
-
-# Ejecutar la aplicación
 if __name__ == "__main__":
     app.run(debug=True)
